@@ -262,7 +262,8 @@ def load_model_safe(path: str):
 
     # ── 2. Patch model_config inside H5: remove BOTH batch_shape and shape,
     #       then add only batch_shape (what TF2.13/Keras2 expects) ───────────────
-    tmp = resolved + ".patched.h5"
+    import tempfile
+    tmp = os.path.join(tempfile.gettempdir(), "model_patched.h5")
     shutil.copy2(resolved, tmp)
     try:
         with h5py.File(tmp, "a") as hf:
@@ -276,11 +277,11 @@ def load_model_safe(path: str):
                             bs = c.pop("batch_shape", None)
                             sh = c.pop("shape", None)
                             c.pop("value_range", None)
-                            # Reconstruct batch_shape from whichever we found
-                            if bs is None and sh is not None:
-                                bs = [None] + list(sh)
-                            if bs is not None:
-                                c["batch_shape"] = bs
+                            # Always use only "shape" (works with Keras installed on Streamlit Cloud)
+                            if sh is not None:
+                                c["shape"] = sh
+                            elif bs is not None:
+                                c["shape"] = bs[1:]  # strip batch dim
                             node["config"] = c
                         for v in node.values():
                             fix(v)
