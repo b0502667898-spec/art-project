@@ -1,11 +1,9 @@
 import os
-# ביטול הגדרות ה-Legacy הישנות כדי לאפשר ל-Keras 3 לעבוד
-if 'TF_USE_LEGACY_KERAS' in os.environ:
-    del os.environ['TF_USE_LEGACY_KERAS']
+# הגדרת סביבה קריטית לתאימות לאחור
+os.environ['TF_USE_LEGACY_KERAS'] = '1'
 
 import streamlit as st
 import tensorflow as tf
-import keras
 from PIL import Image
 import numpy as np
 import requests
@@ -33,8 +31,8 @@ download_file_from_google_drive(DRIVE_URL, MODEL_PATH)
 
 if 'model' not in st.session_state:
     try:
-        # בגרסה החדשה טוענים ישירות מ-keras
-        st.session_state.model = keras.models.load_model(MODEL_PATH, compile=False)
+        # טעינה דרך tf.keras בגרסה 2.15 היא הכי סלחנית לפרמטרים כמו data_format
+        st.session_state.model = tf.keras.models.load_model(MODEL_PATH, compile=False)
     except Exception as e:
         st.error(f"שגיאה בטעינת המודל: {e}")
         st.stop()
@@ -61,7 +59,7 @@ if uploaded_file is not None:
     # עיבוד התמונה
     img = image.resize((224, 224))
     img_array = np.array(img) / 255.0
-    img_array = np.expand_dims(img_array, axis=0).astype(np.float32)
+    img_array = np.expand_dims(img_array, axis=0)
 
     # חיזוי
     predictions = model.predict(img_array)
