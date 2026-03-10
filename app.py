@@ -254,9 +254,32 @@ html, body, [data-testid="stAppViewContainer"] {
 </style>
 """, unsafe_allow_html=True)
 
+# ─── Google Drive Model Download ───────────────────────────────────────────────
+# Put your Google Drive file ID here (from the shareable link):
+# https://drive.google.com/file/d/  >>>FILE_ID<<<  /view?usp=sharing
+GDRIVE_FILE_ID = "1kIZPNmXPCGHn4IXB-nxSubwpnwnvyr2e"
+
 @st.cache_resource(show_spinner=False)
 def load_model_safe(path: str):
-    """Load the .h5 model — InputLayer patch is already applied globally above."""
+    """Download model from Google Drive if missing, then load with patch."""
+    import os, subprocess, sys
+
+    if not os.path.exists(path):
+        if GDRIVE_FILE_ID == "YOUR_GOOGLE_DRIVE_FILE_ID_HERE":
+            raise FileNotFoundError(
+                f"קובץ המודל \'{path}\' לא נמצא ו-GDRIVE_FILE_ID לא הוגדר. "
+                "ערוך את app.py והכנס את ה-ID מ-Google Drive."
+            )
+        # Install gdown if needed
+        try:
+            import gdown
+        except ImportError:
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "gdown", "-q"])
+            import gdown
+
+        url = f"https://drive.google.com/uc?id={GDRIVE_FILE_ID}"
+        gdown.download(url, path, quiet=False, fuzzy=True)
+
     model = tf.keras.models.load_model(path, compile=False)
     return model
 
