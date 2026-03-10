@@ -1,24 +1,12 @@
 import os
-# הגדרות סביבה חייבות להיות ראשונות
-os.environ['TF_USE_LEGACY_KERAS'] = '1'
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
-
 import streamlit as st
 import numpy as np
 import requests
 from PIL import Image
 
-# ניסיון ייבוא חסין תקלות עבור TensorFlow ו-Keras
-try:
-    import tensorflow as tf
-    from tensorflow.keras.models import load_model
-except ImportError:
-    try:
-        import keras
-        from keras.models import load_model
-    except ImportError:
-        st.error("Keras/TensorFlow not found. Please check requirements.txt")
-        st.stop()
+# ייבוא TensorFlow בגרסה היציבה
+import tensorflow as tf
+from tensorflow.keras.models import load_model
 
 # ─── פונקציית הורדה מהדרייב ──────────────────────────────────────────────────
 def download_file_from_google_drive(url, destination):
@@ -43,7 +31,7 @@ download_file_from_google_drive(DRIVE_URL, MODEL_PATH)
 
 if 'model' not in st.session_state:
     try:
-        # שימוש בטעינה ללא קומפילציה למניעת שגיאות גרסה
+        # בגרסה 2.13, batch_shape הוא פרמטר תקין לחלוטין
         st.session_state.model = load_model(MODEL_PATH, compile=False)
     except Exception as e:
         st.error(f"שגיאה בטעינת המודל: {e}")
@@ -68,7 +56,7 @@ if uploaded_file is not None:
     image = Image.open(uploaded_file).convert('RGB')
     st.image(image, caption='התמונה שהועלתה', use_container_width=True)
     
-    # עיבוד תמונה לפי הגודל שהמודל שלך מצפה לו (180x180)
+    # עיבוד תמונה לפי הגודל שהמודל מצפה לו (180x180)
     img = image.resize((180, 180))
     img_array = np.array(img) / 255.0
     img_array = np.expand_dims(img_array, axis=0).astype(np.float32)
