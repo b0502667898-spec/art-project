@@ -1,16 +1,9 @@
 import os
-# הגדרות סביבה קריטיות - חייבות להופיע ראשונות
+# הגדרת סביבה קריטית לגרסה 2.15
 os.environ['TF_USE_LEGACY_KERAS'] = '1'
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 import streamlit as st
 import tensorflow as tf
-# ייבוא ישיר של load_model כדי לעקוף בעיות נתיבים
-try:
-    from tensorflow.keras.models import load_model
-except ImportError:
-    from keras.models import load_model
-
 from PIL import Image
 import numpy as np
 import requests
@@ -38,16 +31,11 @@ download_file_from_google_drive(DRIVE_URL, MODEL_PATH)
 
 if 'model' not in st.session_state:
     try:
-        # טעינה ללא compile פותרת את רוב בעיות התאימות
-        st.session_state.model = load_model(MODEL_PATH, compile=False)
+        # בגרסה 2.15, הפקודה הזו תדע לקרוא את ה-batch_shape ללא שגיאה
+        st.session_state.model = tf.keras.models.load_model(MODEL_PATH, compile=False)
     except Exception as e:
         st.error(f"שגיאה בטעינת המודל: {e}")
-        st.info("מנסה שיטת טעינה חלופית...")
-        try:
-            import keras
-            st.session_state.model = keras.models.load_model(MODEL_PATH, compile=False)
-        except:
-            st.stop()
+        st.stop()
 
 model = st.session_state.model
 
@@ -68,15 +56,15 @@ if uploaded_file is not None:
     image = Image.open(uploaded_file).convert('RGB')
     st.image(image, caption='התמונה שהועלתה', use_container_width=True)
     
-    # עיבוד התמונה
-    img = image.resize((224, 224))
+    # עיבוד התמונה (שים לב: במודל שלך זה 180x180 לפי השגיאה שקיבלת)
+    img = image.resize((180, 180)) 
     img_array = np.array(img) / 255.0
     img_array = np.expand_dims(img_array, axis=0)
 
     # חיזוי
     predictions = model.predict(img_array)
     
-    # חישוב הסתברויות ב-Numpy (יותר יציב מ-TF בשלב זה)
+    # חישוב הסתברויות
     exp_preds = np.exp(predictions[0] - np.max(predictions[0]))
     score = exp_preds / exp_preds.sum()
     
