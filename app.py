@@ -15,8 +15,8 @@ st.set_page_config(
 # ─── Constants ─────────────────────────────────────────────────────────────────
 CLASS_NAMES = ['Goya', 'Monet', 'Raphael', 'Vincent_van_Gogh', 'William_Blake']
 IMG_SIZE    = 180
-MODEL_PATH  = "art_weights.weights.h5"
-GDRIVE_FILE_ID = "1_JGAs8v6_4B2JCC9yFdapXTS9mItN4aZ"
+MODEL_PATH  = "art_weights_v2.weights.h5"
+GDRIVE_FILE_ID = "1T1qmTFfAoEhV9DcWIvkqmxaTxONglkyl"
 
 ARTIST_HEBREW = {
     "Goya":             "פרנסיסקו גויה",
