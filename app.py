@@ -1,14 +1,11 @@
 import os
-
-# הוספת הגדרה קריטית למניעת שגיאת TypeError בטעינת המודל
-# זה חייב להופיע לפני ייבוא tensorflow
+# השבתת הודעות לוג מיותרות של TensorFlow
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+# הכרחת שימוש ב-Keras הישן (תואם למודל .h5)
 os.environ['TF_USE_LEGACY_KERAS'] = '1'
 
 import streamlit as st
 import tensorflow as tf
-# במקום ה-from הקודם, נשתמש בזה:
-load_model = tf.keras.models.load_model
-import tensorflow.keras.backend as K
 from PIL import Image
 import numpy as np
 import requests
@@ -32,17 +29,21 @@ st.set_page_config(page_title="מזהה האמנים", page_icon="🎨")
 MODEL_PATH = "my_art_model.h5"
 DRIVE_URL = "https://drive.google.com/file/d/1kIZPNmXPCGHn4IXB-nxSubwpnwnvyr2e/view?usp=sharing"
 
-# הורדה וטעינה
+# הורדה מהדרייב במידת הצורך
 download_file_from_google_drive(DRIVE_URL, MODEL_PATH)
 
-# טעינה באמצעות מנגנון ה-Legacy כדי למנוע קריסה
+# טעינת המודל לתוך ה-Session State כדי למנוע טעינות חוזרות
 if 'model' not in st.session_state:
-    K.clear_session()
-    st.session_state.model = load_model(MODEL_PATH, compile=False)
+    try:
+        # שימוש בנתיב המלא לטעינה כדי למנוע שגיאות Import
+        st.session_state.model = tf.keras.models.load_model(MODEL_PATH, compile=False)
+    except Exception as e:
+        st.error(f"שגיאה בטעינת המודל: {e}")
+        st.stop()
 
 model = st.session_state.model
 
-# רשימת האמנים (לפי הסדר שהמודל אומן)
+# רשימת האמנים
 ARTISTS = ["Goya", "Monet", "Raphael", "Vincent_van_Gogh", "William_Blake"]
 HEB_NAMES = {
     "Goya": "פרנסיסקו גויה",
@@ -67,13 +68,15 @@ if uploaded_file is not None:
     img_array = np.array(img) / 255.0
     img_array = np.expand_dims(img_array, axis=0)
 
-    # חיזוי
+    # ביצוע חיזוי
     predictions = model.predict(img_array)
-    # שימוש ב-Softmax רגיל של Numpy למניעת תקלות גרסה
-    score = np.exp(predictions[0]) / np.sum(np.exp(predictions[0]))
+    
+    # חישוב הסתברויות (Softmax ידני ב-Numpy)
+    exp_preds = np.exp(predictions[0] - np.max(predictions[0]))
+    score = exp_preds / exp_preds.sum()
+    
     predicted_artist = ARTISTS[np.argmax(score)]
     confidence = 100 * np.max(score)
 
     st.success(f"המודל מזהה שזהו ציור של: **{HEB_NAMES[predicted_artist]}**")
     st.info(f"רמת ביטחון: {confidence:.2f}%")
-
