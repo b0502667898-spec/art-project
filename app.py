@@ -1,5 +1,6 @@
 import streamlit as st
 import tensorflow as tf
+tf.keras.backend.clear_session()
 from PIL import Image
 import numpy as np
 import os
@@ -26,7 +27,7 @@ DRIVE_URL = "https://drive.google.com/file/d/1kIZPNmXPCGHn4IXB-nxSubwpnwnvyr2e/v
 
 # הורדה וטעינה
 download_file_from_google_drive(DRIVE_URL, MODEL_PATH)
-model = tf.keras.models.load_model(MODEL_PATH)
+model = tf.keras.models.load_model(MODEL_PATH, compile=False)
 
 # רשימת האמנים (לפי הסדר שהמודל אומן)
 ARTISTS = ["Goya", "Monet", "Raphael", "Vincent_van_Gogh", "William_Blake"]
@@ -61,3 +62,4 @@ if uploaded_file is not None:
 
     st.success(f"המודל מזהה שזהו ציור של: **{HEB_NAMES[predicted_artist]}**")
     st.info(f"רמת ביטחון: {confidence:.2f}%")
+
