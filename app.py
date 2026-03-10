@@ -4,7 +4,7 @@ import numpy as np
 import requests
 from PIL import Image
 
-# ייבוא TensorFlow בגרסה היציבה
+# ייבוא TensorFlow בגרסה שמתאימה למודל .h5 ישן
 import tensorflow as tf
 from tensorflow.keras.models import load_model
 
@@ -31,7 +31,7 @@ download_file_from_google_drive(DRIVE_URL, MODEL_PATH)
 
 if 'model' not in st.session_state:
     try:
-        # בגרסה 2.13, batch_shape הוא פרמטר תקין לחלוטין
+        # בגרסה 2.13 הפרמטר batch_shape הוא חוקי לחלוטין
         st.session_state.model = load_model(MODEL_PATH, compile=False)
     except Exception as e:
         st.error(f"שגיאה בטעינת המודל: {e}")
