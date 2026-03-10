@@ -1,12 +1,24 @@
 import os
-# הגדרת סביבה קריטית לגרסה 2.15
+# הגדרות סביבה חייבות להיות ראשונות
 os.environ['TF_USE_LEGACY_KERAS'] = '1'
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 import streamlit as st
-import tensorflow as tf
-from PIL import Image
 import numpy as np
 import requests
+from PIL import Image
+
+# ניסיון ייבוא חסין תקלות עבור TensorFlow ו-Keras
+try:
+    import tensorflow as tf
+    from tensorflow.keras.models import load_model
+except ImportError:
+    try:
+        import keras
+        from keras.models import load_model
+    except ImportError:
+        st.error("Keras/TensorFlow not found. Please check requirements.txt")
+        st.stop()
 
 # ─── פונקציית הורדה מהדרייב ──────────────────────────────────────────────────
 def download_file_from_google_drive(url, destination):
@@ -31,8 +43,8 @@ download_file_from_google_drive(DRIVE_URL, MODEL_PATH)
 
 if 'model' not in st.session_state:
     try:
-        # בגרסה 2.15, הפקודה הזו תדע לקרוא את ה-batch_shape ללא שגיאה
-        st.session_state.model = tf.keras.models.load_model(MODEL_PATH, compile=False)
+        # שימוש בטעינה ללא קומפילציה למניעת שגיאות גרסה
+        st.session_state.model = load_model(MODEL_PATH, compile=False)
     except Exception as e:
         st.error(f"שגיאה בטעינת המודל: {e}")
         st.stop()
@@ -56,15 +68,15 @@ if uploaded_file is not None:
     image = Image.open(uploaded_file).convert('RGB')
     st.image(image, caption='התמונה שהועלתה', use_container_width=True)
     
-    # עיבוד התמונה (שים לב: במודל שלך זה 180x180 לפי השגיאה שקיבלת)
-    img = image.resize((180, 180)) 
+    # עיבוד תמונה לפי הגודל שהמודל שלך מצפה לו (180x180)
+    img = image.resize((180, 180))
     img_array = np.array(img) / 255.0
-    img_array = np.expand_dims(img_array, axis=0)
+    img_array = np.expand_dims(img_array, axis=0).astype(np.float32)
 
-    # חיזוי
+    # ביצוע חיזוי
     predictions = model.predict(img_array)
     
-    # חישוב הסתברויות
+    # חישוב הסתברויות ב-Numpy
     exp_preds = np.exp(predictions[0] - np.max(predictions[0]))
     score = exp_preds / exp_preds.sum()
     
