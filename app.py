@@ -240,67 +240,65 @@ GDRIVE_FILE_ID = "1kIZPNmXPCGHn4IXB-nxSubwpnwnvyr2e"
 
 @st.cache_resource(show_spinner=False)
 def load_model_safe(path: str):
-    """Download model from Google Drive if missing, then load with patch."""
-    import os, subprocess, sys
+    import os, subprocess, sys, shutil, json, h5py
 
-    if not os.path.exists(path):
-        if GDRIVE_FILE_ID == "YOUR_GOOGLE_DRIVE_FILE_ID_HERE":
-            raise FileNotFoundError(
-                f"קובץ המודל \'{path}\' לא נמצא ו-GDRIVE_FILE_ID לא הוגדר. "
-                "ערוך את app.py והכנס את ה-ID מ-Google Drive."
-            )
-        # Install gdown if needed
+    # ── 1. Locate file (repo first, then Drive) ────────────────────────────────
+    candidates = [
+        path,
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), path),
+        os.path.join("/mount/src/art-project", path),
+        os.path.join("/mount/src", path),
+    ]
+    resolved = next((p for p in candidates if os.path.exists(p)), None)
+
+    if resolved is None:
         try:
             import gdown
         except ImportError:
             subprocess.check_call([sys.executable, "-m", "pip", "install", "gdown", "-q"])
             import gdown
+        gdown.download(f"https://drive.google.com/uc?id={GDRIVE_FILE_ID}", path, quiet=False, fuzzy=True)
+        resolved = path
 
-        url = f"https://drive.google.com/uc?id={GDRIVE_FILE_ID}"
-        gdown.download(url, path, quiet=False, fuzzy=True)
-
-    # ── Patch the H5 file's model_config JSON before Keras reads it ──────────
-    # This fixes "Unrecognized keyword arguments" regardless of Keras version:
-    # it rewrites batch_shape/shape in the stored config to match what the
-    # installed Keras actually expects, then loads from the patched bytes.
-    import tempfile, shutil, os
-
-    def _fix_model_config(cfg):
-        """Recursively fix InputLayer configs in the model JSON."""
-        if isinstance(cfg, dict):
-            if cfg.get("class_name") in ("InputLayer", "input_layer"):
-                inner = cfg.get("config", {})
-                bs = inner.pop("batch_shape", None)
-                inner.pop("shape", None)          # remove both to start fresh
-                inner.pop("value_range", None)
-                if bs is not None:
-                    inner["batch_shape"] = bs     # keep original key – TF2.13 needs it
-                    inner["shape"] = bs[1:]       # also add shape for newer Keras
-                cfg["config"] = inner
-            for v in cfg.values():
-                _fix_model_config(v)
-        elif isinstance(cfg, list):
-            for item in cfg:
-                _fix_model_config(item)
-        return cfg
-
-    # Copy to a temp file so we can modify the H5 in-place safely
-    tmp = path + ".tmp.h5"
-    shutil.copy2(path, tmp)
+    # ── 2. Patch model_config inside H5: remove BOTH batch_shape and shape,
+    #       then add only batch_shape (what TF2.13/Keras2 expects) ───────────────
+    tmp = resolved + ".patched.h5"
+    shutil.copy2(resolved, tmp)
     try:
-        with h5py.File(tmp, "a") as f:
-            if "model_config" in f.attrs:
-                raw = f.attrs["model_config"]
-                cfg = json.loads(raw)
-                cfg = _fix_model_config(cfg)
-                f.attrs["model_config"] = json.dumps(cfg)
+        with h5py.File(tmp, "a") as hf:
+            if "model_config" in hf.attrs:
+                cfg = json.loads(hf.attrs["model_config"])
+
+                def fix(node):
+                    if isinstance(node, dict):
+                        if node.get("class_name") in ("InputLayer", "input_layer"):
+                            c = node.get("config", {})
+                            bs = c.pop("batch_shape", None)
+                            sh = c.pop("shape", None)
+                            c.pop("value_range", None)
+                            # Reconstruct batch_shape from whichever we found
+                            if bs is None and sh is not None:
+                                bs = [None] + list(sh)
+                            if bs is not None:
+                                c["batch_shape"] = bs
+                            node["config"] = c
+                        for v in node.values():
+                            fix(v)
+                    elif isinstance(node, list):
+                        for item in node:
+                            fix(item)
+
+                fix(cfg)
+                hf.attrs["model_config"] = json.dumps(cfg)
+
         model = tf.keras.models.load_model(tmp, compile=False)
     finally:
         if os.path.exists(tmp):
             os.remove(tmp)
+
     return model
 
-def preprocess(image: Image.Image) -> np.ndarray:
+def preprocess(image):
     img = image.convert("RGB").resize((IMG_SIZE, IMG_SIZE))
     arr = np.array(img, dtype=np.float32) / 255.0
     return np.expand_dims(arr, axis=0)
