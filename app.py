@@ -15,8 +15,8 @@ st.set_page_config(
 # ─── Constants ─────────────────────────────────────────────────────────────────
 CLASS_NAMES = ['Goya', 'Monet', 'Raphael', 'Vincent_van_Gogh', 'William_Blake']
 IMG_SIZE    = 180
-MODEL_PATH  = "art_weights_v2.weights.h5"
-GDRIVE_FILE_ID = "1T1qmTFfAoEhV9DcWIvkqmxaTxONglkyl"
+MODEL_PATH  = "art_weights_v3.weights.h5"
+GDRIVE_FILE_ID = "10jqKWh0187Sz5AEKynuEA9IEYCjF4hUO"
 
 ARTIST_HEBREW = {
     "Goya":             "פרנסיסקו גויה",
@@ -222,11 +222,19 @@ def load_model_safe(path: str):
             import gdown
         gdown.download(f"https://drive.google.com/uc?id={GDRIVE_FILE_ID}", path, quiet=False, fuzzy=True)
 
+    # בונים את הארכיטקטורה בדיוק כמו המודל המקורי:
+    # input → Sequential(augmentation) → ResNet50V2 → GAP → Dropout → Dense
+
+    # שכבת Augmentation + Rescaling בתוך Sequential (כמו במקור)
+    aug = tf.keras.Sequential([
+        tf.keras.layers.RandomFlip("horizontal_and_vertical"),
+        tf.keras.layers.RandomRotation(0.2),
+        tf.keras.layers.RandomContrast(0.2),
+        tf.keras.layers.Rescaling(scale=1./127.5, offset=-1.0),
+    ])
+
     inp = tf.keras.Input(shape=(180, 180, 3))
-    x = tf.keras.layers.RandomFlip("horizontal_and_vertical")(inp, training=False)
-    x = tf.keras.layers.RandomRotation(0.2)(x, training=False)
-    x = tf.keras.layers.RandomContrast(0.2)(x, training=False)
-    x = tf.keras.layers.Rescaling(scale=1./127.5, offset=-1.0)(x)
+    x = aug(inp, training=False)
     base = tf.keras.applications.ResNet50V2(include_top=False, weights=None, input_tensor=x)
     x = base.output
     x = tf.keras.layers.GlobalAveragePooling2D()(x)
