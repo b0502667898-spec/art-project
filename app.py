@@ -41,7 +41,7 @@ ARTIST_STYLE = {
 
 CLASS_NAMES = ['Goya', 'Monet', 'Raphael', 'Vincent_van_Gogh', 'William_Blake']
 IMG_SIZE    = 180
-MODEL_PATH  = "my_art_model_gmar_project.h5"
+MODEL_PATH  = "art_model_clean.keras"
 
 # ─── CSS ───────────────────────────────────────────────────────────────────────
 st.markdown("""
@@ -236,69 +236,22 @@ html, body, [data-testid="stAppViewContainer"] {
 # ─── Google Drive Model Download ───────────────────────────────────────────────
 # Put your Google Drive file ID here (from the shareable link):
 # https://drive.google.com/file/d/  >>>FILE_ID<<<  /view?usp=sharing
-GDRIVE_FILE_ID = "1kIZPNmXPCGHn4IXB-nxSubwpnwnvyr2e"
+GDRIVE_FILE_ID = "1X9fZuOi8LhdKz1E6GSIS_qyJyMhkFdHr"
 
 @st.cache_resource(show_spinner=False)
 def load_model_safe(path: str):
-    import os, subprocess, sys, shutil, json, h5py
+    import os, subprocess, sys
 
-    # ── 1. Locate file (repo first, then Drive) ────────────────────────────────
-    candidates = [
-        path,
-        os.path.join(os.path.dirname(os.path.abspath(__file__)), path),
-        os.path.join("/mount/src/art-project", path),
-        os.path.join("/mount/src", path),
-    ]
-    resolved = next((p for p in candidates if os.path.exists(p)), None)
-
-    if resolved is None:
+    # Download from Drive if not in repo
+    if not os.path.exists(path):
         try:
             import gdown
         except ImportError:
             subprocess.check_call([sys.executable, "-m", "pip", "install", "gdown", "-q"])
             import gdown
         gdown.download(f"https://drive.google.com/uc?id={GDRIVE_FILE_ID}", path, quiet=False, fuzzy=True)
-        resolved = path
 
-    # ── 2. Patch model_config inside H5: remove BOTH batch_shape and shape,
-    #       then add only batch_shape (what TF2.13/Keras2 expects) ───────────────
-    import tempfile
-    tmp = os.path.join(tempfile.gettempdir(), "model_patched.h5")
-    shutil.copy2(resolved, tmp)
-    try:
-        with h5py.File(tmp, "a") as hf:
-            if "model_config" in hf.attrs:
-                cfg = json.loads(hf.attrs["model_config"])
-
-                def fix(node):
-                    if isinstance(node, dict):
-                        if node.get("class_name") in ("InputLayer", "input_layer"):
-                            c = node.get("config", {})
-                            bs = c.pop("batch_shape", None)
-                            sh = c.pop("shape", None)
-                            c.pop("value_range", None)
-                            # Always use only "shape" (works with Keras installed on Streamlit Cloud)
-                            if sh is not None:
-                                c["shape"] = sh
-                            elif bs is not None:
-                                c["shape"] = bs[1:]  # strip batch dim
-                            node["config"] = c
-                        for v in node.values():
-                            fix(v)
-                    elif isinstance(node, list):
-                        for item in node:
-                            fix(item)
-
-                fix(cfg)
-                hf.attrs["model_config"] = json.dumps(cfg)
-
-        model = tf.keras.models.load_model(tmp, compile=False)
-    finally:
-        if os.path.exists(tmp):
-            os.remove(tmp)
-
-    return model
-
+    return tf.keras.models.load_model(path, compile=False)
 def preprocess(image):
     img = image.convert("RGB").resize((IMG_SIZE, IMG_SIZE))
     arr = np.array(img, dtype=np.float32) / 255.0
