@@ -2,30 +2,9 @@ import streamlit as st
 import numpy as np
 from PIL import Image
 import io
-import copy
-
-# ─── TensorFlow Compatibility Patch ────────────────────────────────────────────
-# Must run BEFORE any tf.keras model loading.
-# TF 2.13 passes `batch_shape` to InputLayer but newer Keras drops that kwarg.
-# We patch InputLayer.__init__ to silently convert batch_shape → shape.
+import json
+import h5py
 import tensorflow as tf
-
-_original_input_layer_init = tf.keras.layers.InputLayer.__init__
-
-def _patched_input_layer_init(self, *args, **kwargs):
-    # Convert legacy batch_shape → shape (strip the batch dimension)
-    if 'batch_shape' in kwargs and 'shape' not in kwargs:
-        batch_shape = kwargs.pop('batch_shape')
-        if batch_shape is not None:
-            kwargs['shape'] = batch_shape[1:]
-        else:
-            kwargs.pop('batch_shape', None)
-    # Drop any other unknown keys that cause TypeError
-    kwargs.pop('value_range', None)
-    _original_input_layer_init(self, *args, **kwargs)
-
-tf.keras.layers.InputLayer.__init__ = _patched_input_layer_init
-# ───────────────────────────────────────────────────────────────────────────────
 
 # ─── Page Config ───────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -280,7 +259,45 @@ def load_model_safe(path: str):
         url = f"https://drive.google.com/uc?id={GDRIVE_FILE_ID}"
         gdown.download(url, path, quiet=False, fuzzy=True)
 
-    model = tf.keras.models.load_model(path, compile=False)
+    # ── Patch the H5 file's model_config JSON before Keras reads it ──────────
+    # This fixes "Unrecognized keyword arguments" regardless of Keras version:
+    # it rewrites batch_shape/shape in the stored config to match what the
+    # installed Keras actually expects, then loads from the patched bytes.
+    import tempfile, shutil, os
+
+    def _fix_model_config(cfg):
+        """Recursively fix InputLayer configs in the model JSON."""
+        if isinstance(cfg, dict):
+            if cfg.get("class_name") in ("InputLayer", "input_layer"):
+                inner = cfg.get("config", {})
+                bs = inner.pop("batch_shape", None)
+                inner.pop("shape", None)          # remove both to start fresh
+                inner.pop("value_range", None)
+                if bs is not None:
+                    inner["batch_shape"] = bs     # keep original key – TF2.13 needs it
+                    inner["shape"] = bs[1:]       # also add shape for newer Keras
+                cfg["config"] = inner
+            for v in cfg.values():
+                _fix_model_config(v)
+        elif isinstance(cfg, list):
+            for item in cfg:
+                _fix_model_config(item)
+        return cfg
+
+    # Copy to a temp file so we can modify the H5 in-place safely
+    tmp = path + ".tmp.h5"
+    shutil.copy2(path, tmp)
+    try:
+        with h5py.File(tmp, "a") as f:
+            if "model_config" in f.attrs:
+                raw = f.attrs["model_config"]
+                cfg = json.loads(raw)
+                cfg = _fix_model_config(cfg)
+                f.attrs["model_config"] = json.dumps(cfg)
+        model = tf.keras.models.load_model(tmp, compile=False)
+    finally:
+        if os.path.exists(tmp):
+            os.remove(tmp)
     return model
 
 def preprocess(image: Image.Image) -> np.ndarray:
