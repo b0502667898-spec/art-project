@@ -1,9 +1,16 @@
 import os
-# הגדרת סביבה קריטית לתאימות לאחור
+# הגדרות סביבה קריטיות - חייבות להופיע ראשונות
 os.environ['TF_USE_LEGACY_KERAS'] = '1'
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 import streamlit as st
 import tensorflow as tf
+# ייבוא ישיר של load_model כדי לעקוף בעיות נתיבים
+try:
+    from tensorflow.keras.models import load_model
+except ImportError:
+    from keras.models import load_model
+
 from PIL import Image
 import numpy as np
 import requests
@@ -31,11 +38,16 @@ download_file_from_google_drive(DRIVE_URL, MODEL_PATH)
 
 if 'model' not in st.session_state:
     try:
-        # טעינה דרך tf.keras בגרסה 2.15 היא הכי סלחנית לפרמטרים כמו data_format
-        st.session_state.model = tf.keras.models.load_model(MODEL_PATH, compile=False)
+        # טעינה ללא compile פותרת את רוב בעיות התאימות
+        st.session_state.model = load_model(MODEL_PATH, compile=False)
     except Exception as e:
         st.error(f"שגיאה בטעינת המודל: {e}")
-        st.stop()
+        st.info("מנסה שיטת טעינה חלופית...")
+        try:
+            import keras
+            st.session_state.model = keras.models.load_model(MODEL_PATH, compile=False)
+        except:
+            st.stop()
 
 model = st.session_state.model
 
@@ -64,7 +76,7 @@ if uploaded_file is not None:
     # חיזוי
     predictions = model.predict(img_array)
     
-    # Softmax ידני
+    # חישוב הסתברויות ב-Numpy (יותר יציב מ-TF בשלב זה)
     exp_preds = np.exp(predictions[0] - np.max(predictions[0]))
     score = exp_preds / exp_preds.sum()
     
