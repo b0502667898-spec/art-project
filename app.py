@@ -41,7 +41,7 @@ ARTIST_STYLE = {
 
 CLASS_NAMES = ['Goya', 'Monet', 'Raphael', 'Vincent_van_Gogh', 'William_Blake']
 IMG_SIZE    = 180
-MODEL_PATH  = "art_model_clean.keras"
+MODEL_PATH  = "art_model_v2.h5"
 
 # ─── CSS ───────────────────────────────────────────────────────────────────────
 st.markdown("""
@@ -236,7 +236,7 @@ html, body, [data-testid="stAppViewContainer"] {
 # ─── Google Drive Model Download ───────────────────────────────────────────────
 # Put your Google Drive file ID here (from the shareable link):
 # https://drive.google.com/file/d/  >>>FILE_ID<<<  /view?usp=sharing
-GDRIVE_FILE_ID = "1X9fZuOi8LhdKz1E6GSIS_qyJyMhkFdHr"
+GDRIVE_FILE_ID = "1s753sV_JqAmdGqGRe6Eu66KWodYjdaKq"
 
 @st.cache_resource(show_spinner=False)
 def load_model_safe(path: str):
@@ -254,7 +254,7 @@ def load_model_safe(path: str):
     return tf.keras.models.load_model(path, compile=False)
 def preprocess(image):
     img = image.convert("RGB").resize((IMG_SIZE, IMG_SIZE))
-    arr = np.array(img, dtype=np.float32) / 255.0
+    arr = np.array(img, dtype=np.float32)  # ללא נרמול - המודל עושה זאת פנימית
     return np.expand_dims(arr, axis=0)
 
 # ─── Header ────────────────────────────────────────────────────────────────────
