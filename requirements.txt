@@ -2,5 +2,4 @@ streamlit
 tensorflow-cpu==2.13.0
 numpy<2.0.0
 Pillow
-requests
 gdown
