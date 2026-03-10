@@ -6,7 +6,8 @@ os.environ['TF_USE_LEGACY_KERAS'] = '1'
 
 import streamlit as st
 import tensorflow as tf
-from tensorflow.keras.models import load_model
+# במקום ה-from הקודם, נשתמש בזה:
+load_model = tf.keras.models.load_model
 import tensorflow.keras.backend as K
 from PIL import Image
 import numpy as np
@@ -75,3 +76,4 @@ if uploaded_file is not None:
 
     st.success(f"המודל מזהה שזהו ציור של: **{HEB_NAMES[predicted_artist]}**")
     st.info(f"רמת ביטחון: {confidence:.2f}%")
+
